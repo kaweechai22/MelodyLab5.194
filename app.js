@@ -159,14 +159,14 @@ function drawRebuiltTopic(ctx,c,p,w,h,mode){
     ctx.setLineDash([7,7]);
     ctx.strokeStyle="rgba(255,255,255,.78)";
     ctx.lineWidth=2.2;
-    ctx.beginPath(); ctx.moveTo(wallX-210,hitY); ctx.lineTo(wallX+62,hitY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(wallX-54,hitY); ctx.lineTo(wallX+122,hitY); ctx.stroke();
     ctx.setLineDash([]);
     ctx.fillStyle="#e8f5ff";
     ctx.font="bold 13px Sarabun, system-ui";
     ctx.textAlign="center";
-    ctx.fillText("Normal line",wallX-120,hitY-18);
+    ctx.fillText("Normal line",wallX+78,hitY-18);
     ctx.font="12px Sarabun, system-ui";
-    ctx.fillText("(เส้นแนวฉาก)",wallX-120,hitY-2);
+    ctx.fillText("(เส้นแนวฉาก)",wallX+78,hitY-2);
     ctx.restore();
 
     // Wall type label moved to the top of the wall.
@@ -222,7 +222,10 @@ function drawRebuiltTopic(ctx,c,p,w,h,mode){
     ctx.fillStyle = "#e8f5ff";
     ctx.font = "bold 13px Sarabun, system-ui";
     ctx.textAlign = "center";
-    ctx.fillText(`s = ${distance.toFixed(1)} m`, (srcX+wallX)/2, dY-7);
+    ctx.fillText(`s = ${distance.toFixed(1)} m`, (srcX+wallX)/2, dY-13);
+    ctx.font = "11px Sarabun, system-ui";
+    ctx.fillStyle = "rgba(226,232,240,.88)";
+    ctx.fillText("ระยะตั้งฉากถึงผนัง", (srcX+wallX)/2, dY+4);
     ctx.restore();
 
     // Moving packets.
@@ -277,8 +280,8 @@ function drawRebuiltTopic(ctx,c,p,w,h,mode){
     ctx.fillText("หมายเหตุ", noteX+14, bottomY+20);
     ctx.font = "12px Sarabun, system-ui";
     ctx.fillStyle = "rgba(226,232,240,.94)";
-    ctx.fillText("เสียงสะท้อนมีอยู่เสมอ", noteX+14, bottomY+38);
-    ctx.fillText("แต่ถ้า t_echo < 0.10 s จะยังไม่เกิด Echo ชัดเจน", noteX+14, bottomY+54);
+    ctx.fillText("s คือระยะตั้งฉากถึงผนัง", noteX+14, bottomY+38);
+    ctx.fillText("t_echo = 2s/v", noteX+14, bottomY+54);
     ctx.restore();
 
     ctx.save();
@@ -2263,62 +2266,101 @@ function playReflectionEchoDemo(){
   }
   const ctx = new AudioCtx();
   if(ctx.state === "suspended") ctx.resume();
-  const now = ctx.currentTime + 0.05;
+  const now = ctx.currentTime + 0.06;
   const distance = Number($("vizDistance")?.value || 10);
   const amp = Number($("vizAmp")?.value || 0.8);
   const wallType = $("vizWallType")?.value || "rigid";
   const echoDelay = 2*distance/343;
   const echoOccurs = echoDelay >= 0.10;
-  const reflRatio = wallType === "rigid" ? 0.88 : 0.42;
+  const reflRatio = wallType === "rigid" ? 0.90 : 0.45;
   const sampleRate = ctx.sampleRate;
 
-  function makeClapBuffer(duration=0.11){
+  function makeTapBuffer(duration=0.12){
     const len = Math.floor(duration*sampleRate);
     const buffer = ctx.createBuffer(1, len, sampleRate);
     const data = buffer.getChannelData(0);
     for(let i=0;i<len;i++){
       const t=i/sampleRate;
-      const env=Math.exp(-t/0.028) * (1-Math.exp(-t/0.0025));
+      const env=Math.exp(-t/0.024) * (1-Math.exp(-t/0.0018));
       data[i]=(Math.random()*2-1)*env;
     }
     return buffer;
   }
 
-  const clapBuffer = makeClapBuffer();
-
-  function playClap(t, gainScale=1){
+  const tapBuffer = makeTapBuffer();
+  function playTap(t, gainScale=1, dull=false){
     const src = ctx.createBufferSource();
-    src.buffer = clapBuffer;
+    src.buffer = tapBuffer;
     const hp = ctx.createBiquadFilter();
     hp.type = "highpass";
-    hp.frequency.value = 900;
+    hp.frequency.value = dull ? 520 : 900;
     const bp = ctx.createBiquadFilter();
     bp.type = "bandpass";
-    bp.frequency.value = 1700;
-    bp.Q.value = 0.9;
+    bp.frequency.value = dull ? 1250 : 1800;
+    bp.Q.value = dull ? 0.7 : 1.0;
     const gain = ctx.createGain();
     gain.gain.setValueAtTime(0.0001, t);
-    gain.gain.exponentialRampToValueAtTime(Math.max(0.03, gainScale), t+0.006);
+    gain.gain.exponentialRampToValueAtTime(Math.max(0.02, gainScale), t+0.006);
     gain.gain.exponentialRampToValueAtTime(0.0001, t+0.12);
     src.connect(hp).connect(bp).connect(gain).connect(ctx.destination);
     src.start(t);
     src.stop(t+0.13);
   }
 
-  const directGain = Math.max(0.12, Math.min(0.45, amp*0.32));
-  const echoGain = Math.max(0.05, directGain*reflRatio);
+  const directGain = Math.max(0.12, Math.min(0.46, amp*0.34));
+  const echoGain = Math.max(0.045, directGain*reflRatio*0.72);
 
-  playClap(now, directGain);
-  playClap(now + Math.max(0.012, echoDelay), echoGain);
+  // Short tap layer makes the echo timing clear even on phones.
+  playTap(now, directGain, false);
+  playTap(now + Math.max(0.012, echoDelay), echoGain, true);
   if(echoOccurs){
-    playClap(now + Math.max(0.018, echoDelay*1.9), echoGain*0.38);
+    playTap(now + echoDelay*2, echoGain*0.45, true);
+    playTap(now + echoDelay*3, echoGain*0.22, true);
+  }
+
+  // Voice layer: say "physics", then the echo tail "sics" softly repeats.
+  // v5.119: make TTS more reliable on mobile/PWA.
+  if("speechSynthesis" in window){
+    try{
+      const synth = window.speechSynthesis;
+      synth.cancel();
+      synth.resume();
+      const voices = synth.getVoices ? synth.getVoices() : [];
+      const englishVoice = voices.find(v => /^en/i.test(v.lang || "")) || voices[0] || null;
+      const speak = (text, delayMs, volume, rate=0.92) => {
+        setTimeout(()=>{
+          try{
+            const u = new SpeechSynthesisUtterance(text);
+            u.lang = (englishVoice && englishVoice.lang) ? englishVoice.lang : "en-US";
+            if(englishVoice) u.voice = englishVoice;
+            u.volume = Math.max(0.05, Math.min(1, volume));
+            u.rate = rate;
+            u.pitch = 1.0;
+            synth.speak(u);
+          }catch(err){ /* keep tap layer as fallback */ }
+        }, Math.max(0, delayMs));
+      };
+      // Slight delay helps some Android devices start the first utterance reliably.
+      speak("physics", 40, Math.max(0.52, Math.min(1, amp)), 0.90);
+      const firstEchoMs = Math.round(echoDelay*1000) + 40;
+      if(echoOccurs){
+        speak("sics", firstEchoMs, Math.max(0.12, reflRatio*0.62), 0.88);
+        speak("sics", Math.round(echoDelay*2000) + 40, Math.max(0.08, reflRatio*0.36), 0.86);
+        speak("sics", Math.round(echoDelay*3000) + 40, Math.max(0.05, reflRatio*0.20), 0.84);
+      }else{
+        // Very close reflection: keep only a faint quick tail so it does not sound like a separated echo.
+        speak("sics", Math.max(90, firstEchoMs), Math.max(0.05, reflRatio*0.18), 0.95);
+      }
+    }catch(e){
+      // Web Audio tap layer above is the fallback.
+    }
   }
 
   if($("vizEchoAudioLabel")){
     $("vizEchoAudioLabel").textContent = echoOccurs ? "✅ เกิด Echo" : "⚠️ ไม่เกิด Echo";
   }
 
-  setTimeout(()=>ctx.close().catch(()=>{}), Math.ceil((Math.max(echoDelay*2.1, 0.35)+0.55)*1000));
+  setTimeout(()=>ctx.close().catch(()=>{}), Math.ceil((Math.max(echoDelay*3.2, 0.6)+0.9)*1000));
 }
 
 function initVisualizer(){
