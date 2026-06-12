@@ -70,7 +70,11 @@
       <div class="field richField neonParamRow echoDemoRow">
         <div class="paramIcon echoIcon">🔊</div>
         <div class="paramText echoText"><label>ฟังตัวอย่างเสียง Echo</label></div>
-        <button id="reflectSoundBtn" class="secondary echoDemoBtn" type="button" aria-label="เล่นตัวอย่างเสียง Echo">▶ เล่นเสียงฟิสิกส์ Echo</button>
+        <div class="echoSamplePicker" role="group" aria-label="เลือกตัวอย่างเสียง Echo">
+          <button id="echoSamplePhysics" class="echoChoiceBtn active" type="button" data-echo-sample="physics" aria-pressed="true">Physics</button>
+          <button id="echoSampleHello" class="echoChoiceBtn" type="button" data-echo-sample="hello" aria-pressed="false">Hello</button>
+        </div>
+        <button id="reflectSoundBtn" class="secondary echoDemoBtn" type="button" aria-label="เล่นตัวอย่างเสียง Echo">▶ เล่นตัวอย่างเสียง Echo</button>
         <div class="paramValueWrap echoValue"><span id="vizEchoAudioLabel" class="valueBadge">พร้อมเล่น</span></div>
       </div>
       <div class="field richField neonParamRow">

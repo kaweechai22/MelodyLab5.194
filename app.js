@@ -81,7 +81,8 @@ function drawRebuiltTopic(ctx,c,p,w,h,mode){
     const incidentWidth = 1.8 + amp*2.6;
     const incidentWaveWidth = 0.9 + amp*2.2;
     const reflWidth = (wallType==="rigid" ? 1.8 : 1.0) + amp*2.6*reflRatio;
-    const reflectedEnergy = Math.round(reflRatio * amp * amp * 100);
+    // v5.124: ไม่แสดงเปอร์เซ็นต์ความเข้มเสียงสะท้อน เพื่อไม่ให้นักเรียนสับสนเรื่องความเข้มเสียง
+  // const reflectedEnergy = Math.round(reflRatio * amp * amp * 100);
     vText("vizAngleLabel",angle.toFixed(0)+"°");
     vText("vizFreqLabel","f คงที่");
     vText("vizAmpLabel",amp.toFixed(2));
@@ -178,7 +179,6 @@ function drawRebuiltTopic(ctx,c,p,w,h,mode){
     ctx.font="12px Sarabun, system-ui";
     ctx.fillText(wallType==="rigid"?"(ผนังแข็ง)":"(ผนังดูดซับ)", wallX+5, panel.y+46);
     ctx.fillStyle=wallType==="rigid"?"rgba(124,255,124,.92)":"rgba(191,219,254,.85)";
-    ctx.fillText(`สะท้อน ≈ ${reflectedEnergy}%`, wallX+5, panel.y+64);
     ctx.restore();
 
     // Rays.
@@ -599,7 +599,7 @@ function stopNoise(){if(noiseCtx)noiseCtx.close();noiseCtx=noiseSrc=noiseGain=nu
 function playBeat(){stopBeat();beatCtx=new (window.AudioContext||window.webkitAudioContext)();beatOsc1=beatCtx.createOscillator();beatOsc2=beatCtx.createOscillator();beatGain=beatCtx.createGain();beatOsc1.frequency.value=Number($("beatF1").value||440);beatOsc2.frequency.value=Number($("beatF2").value||444);beatGain.gain.value=Number($("beatVol").value||.06);beatOsc1.connect(beatGain);beatOsc2.connect(beatGain);beatGain.connect(beatCtx.destination);beatOsc1.start();beatOsc2.start();drawBeat();}
 function stopBeat(){if(beatCtx)beatCtx.close();beatCtx=beatOsc1=beatOsc2=beatGain=null;}
 
-let vizState = {mode:(window.__melodyLabVizMode||"longitudinal"), running:true, t:0, raf:null};
+let vizState = {mode:(window.__melodyLabVizMode||"longitudinal"), running:true, t:0, raf:null, echoSample:"physics"};
 function getVizParams(){
   const f=Number($("vizFreq")?.value||440);
   const A=Number($("vizAmp")?.value||0.7);
@@ -2266,10 +2266,8 @@ function playReflectionEchoDemo(){
   const echoOccurs = echoDelay >= 0.10;
   const reflRatio = wallType === "rigid" ? 0.90 : 0.45;
   const label = $("vizEchoAudioLabel");
+  const sample = vizState.echoSample || "physics";
 
-  // v5.122: use the spoken word "physics" as the direct sound.
-  // Echo repeats use only the final tail "sics", closer to what listeners perceive from speech echoes.
-  // Echo tail is played only when the physics condition t_echo >= 0.10 s is true.
   if(!("speechSynthesis" in window)){
     if(label) label.textContent = "ไม่รองรับเสียงพูด";
     alert("เบราว์เซอร์นี้ไม่รองรับเสียงพูดอัตโนมัติ");
@@ -2307,31 +2305,56 @@ function playReflectionEchoDemo(){
     }, Math.max(0, delayMs));
   };
 
+  const sampleConfigs = {
+    physics: {
+      direct: { text:"physics", rate:0.90, pitch:1.00 },
+      echoes: [
+        { text:"sics", rate:0.84, pitch:0.96 },
+        { text:"sics", rate:0.80, pitch:0.94 },
+        { text:"sics", rate:0.78, pitch:0.92 }
+      ]
+    },
+    hello: {
+      direct: { text:"hello", rate:0.92, pitch:1.00 },
+      echoes: [
+        { text:"lo", rate:0.86, pitch:0.97 },
+        { text:"lo", rate:0.82, pitch:0.95 },
+        { text:"lo", rate:0.80, pitch:0.93 }
+      ]
+    }
+  };
+  const cfg = sampleConfigs[sample] || sampleConfigs.physics;
+
   try{
     synth.cancel();
     synth.resume();
-
-    // Dry/direct sound: the original word.
-    speak("physics", 40, baseVolume, 0.90, 1.00);
+    speak(cfg.direct.text, 40, baseVolume, cfg.direct.rate, cfg.direct.pitch);
 
     if(echoOccurs){
-      // Natural classroom echo design: keep the direct word complete,
-      // then let only the final tail "sics" return as the audible echo.
-      // This avoids the echo sounding like a second person saying the full word again.
       const d1 = Math.round(echoDelay*1000) + 40;
-      speak("sics", d1, echo1Volume, 0.84, 0.96);
-      speak("sics", Math.round(echoDelay*2000) + 40, echo2Volume, 0.80, 0.94);
+      speak(cfg.echoes[0].text, d1, echo1Volume, cfg.echoes[0].rate, cfg.echoes[0].pitch);
+      speak(cfg.echoes[1].text, Math.round(echoDelay*2000) + 40, echo2Volume, cfg.echoes[1].rate, cfg.echoes[1].pitch);
       if(echoDelay >= 0.16){
-        speak("sics", Math.round(echoDelay*3000) + 40, echo3Volume, 0.78, 0.92);
+        speak(cfg.echoes[2].text, Math.round(echoDelay*3000) + 40, echo3Volume, cfg.echoes[2].rate, cfg.echoes[2].pitch);
       }
       if(label) label.textContent = "✅ เกิด Echo";
     }else{
-      // No separated echo: play only the original word. Do not play echo repeats.
       if(label) label.textContent = "⚠️ ยังไม่เกิด Echo";
     }
   }catch(e){
     if(label) label.textContent = "เล่นเสียงไม่ได้";
   }
+}
+
+function setEchoSample(sample){
+  vizState.echoSample = sample === "hello" ? "hello" : "physics";
+  ["echoSamplePhysics","echoSampleHello"].forEach(id=>{
+    const btn = $(id);
+    if(!btn) return;
+    const active = btn.dataset.echoSample === vizState.echoSample;
+    btn.classList.toggle("active", active);
+    btn.setAttribute("aria-pressed", active ? "true" : "false");
+  });
 }
 
 function initVisualizer(){
@@ -2353,6 +2376,12 @@ function initVisualizer(){
     el.addEventListener("input", handler);
     el.addEventListener("change", handler);
   });
+  ["echoSamplePhysics","echoSampleHello"].forEach(id=>{
+    const btn=$(id);
+    if(!btn) return;
+    btn.onclick=()=>setEchoSample(btn.dataset.echoSample || "physics");
+  });
+  setEchoSample(vizState.echoSample || "physics");
   if($("reflectSoundBtn")) $("reflectSoundBtn").onclick=playReflectionEchoDemo;
   if($("vizPlayBtn")) $("vizPlayBtn").onclick=()=>{vizState.running=true;updateVizPlayerButtons("play");if(vizState.raf) cancelAnimationFrame(vizState.raf);drawVisualizer();};
   if($("vizPauseBtn")) $("vizPauseBtn").onclick=()=>{vizState.running=false;updateVizPlayerButtons("pause");drawVisualizer();};
