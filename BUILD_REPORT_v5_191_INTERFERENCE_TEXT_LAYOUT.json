@@ -1,0 +1,10 @@
+{
+  "version": "v5.191",
+  "base": "v5.190",
+  "changes": [
+    "shortened section lead",
+    "more compact key points",
+    "reduced speaker/wall visual weight",
+    "made wave field more prominent"
+  ]
+}
